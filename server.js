@@ -1,51 +1,123 @@
-const express = require("express");
-const { WebSocketServer } = require("ws");
-const http = require("http");
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocket.Server({ server });
 
-app.get("/", (req, res) => {
-  res.send("Serveur WebSocket actif");
-});
+let espClient = null;
+let webClients = new Set();
 
-wss.on("connection", (ws) => {
-  console.log("Nouvelle connexion établie");
+console.log('Server starting...');
 
-  ws.on("message", (message) => {
-    //console.log("Reçu :", message.toString());
-    //console.log(typeof message.toString());
+wss.on('connection', (ws, req) => {
+    console.log(`New WebSocket connection from ${req.socket.remoteAddress}`);
+    
+    if (req.url === '/esp') {
+        espClient = ws;
+        console.log('ESP32-CAM connected');
 
-    //if (typeof message.toString() === "string") {
-    if (message.length < 100) {
-      console.log("Message texte reçu: taille:", message.length, "bytes");
-      //console.log("Message texte reçu:", message);
-      // Diffuser le message à tous les clients connectés
-      wss.clients.forEach((client) => {
-        if (client !== ws && client.readyState === 1) {
-          client.send(message.toString());
+        /*
+        ws.on('message', (message) => {            
+            console.log(`Received message from ESP32-CAM: ${message.length} bytes`);
+            
+            webClients.forEach((client) => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(message);
+                    console.log('Sent message to web client');
+                }
+            });
+        });
+        */
+        ws.on("message", (message) => {
+        //console.log("Reçu :", message.toString());
+        //console.log(typeof message.toString());
+
+        //if (typeof message.toString() === "string") {
+        if (message.length < 100) {
+        console.log("Message texte reçu: taille:", message.length, "bytes");
+        //console.log("Message texte reçu:", message);
+        // Diffuser le message à tous les clients connectés
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === 1) {
+            client.send(message.toString());
+            }
+        });
+
+        // Traitement des données de capteurs
+        } else {
+        console.log("Image reçue, taille:", message.length, "bytes");
+        // Traitement de l'image (par exemple, sauvegarde ou transmission)
+
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === 1) {
+            //client.send(message.toString());
+            client.send(message);
+            }
+        });
         }
-      });
+        // Diffusion aux autres clients si nécessaire
+    });
 
-      // Traitement des données de capteurs
-    } else {
-      console.log("Image reçue, taille:", message.length, "bytes");
-      // Traitement de l'image (par exemple, sauvegarde ou transmission)
+        ws.on('close', () => {
+            console.log('ESP32-CAM disconnected');
+            espClient = null;
+        });
 
-      wss.clients.forEach((client) => {
-        if (client !== ws && client.readyState === 1) {
-          //client.send(message.toString());
-          client.send(message);
-        }
-      });
+        ws.on('error', (error) => {
+            console.error('Error with ESP32-CAM connection:', error);
+        });
+
+    } else if (req.url === '/web') {
+        webClients.add(ws);
+        console.log('Web client connected');
+
+        ws.on('message', (message) => {
+            console.log(`Received message from web client: ${message}`);
+            
+            if (espClient && espClient.readyState === WebSocket.OPEN) {
+                espClient.send(message);
+                console.log('Sent message to ESP32-CAM');
+            } else {
+                console.log('ESP32-CAM not connected, message not sent');
+            }
+        });
+
+        ws.on('close', () => {
+            console.log('Web client disconnected');
+            webClients.delete(ws);
+        });
+
+        ws.on('error', (error) => {
+            console.error('Error with web client connection:', error);
+        });
     }
-    // Diffusion aux autres clients si nécessaire
-  });
-
-  ws.on("close", () => console.log("Client déconnecté"));
 });
 
-const listener = server.listen(process.env.PORT, () => {
-  console.log("Votre app écoute sur le port " + listener.address().port);
+app.get('/', (req, res) => {
+    res.send('Server is running');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`WebSocket server is ready`);
+});
+
+// Log active connections every 5 minutes
+setInterval(() => {
+    console.log(`Active connections - ESP32-CAM: ${espClient ? 'Connected' : 'Disconnected'}, Web Clients: ${webClients.size}`);
+}, 300000);
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Server error:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
