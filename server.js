@@ -1,9 +1,24 @@
-const express = require("express");
+/*const express = require("express");
 const { WebSocketServer } = require("ws");
 const http = require("http");
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+*/
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+
+
+
 let ValMode = 1;
 
 app.get("/", (req, res) => {
