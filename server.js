@@ -1,24 +1,10 @@
-/*const express = require("express");
+const express = require("express");
 const { WebSocketServer } = require("ws");
 const http = require("http");
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-*/
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const cors = require('cors');
-
-const app = express();
-app.use(cors());
-
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-
-
-
+//let fin = 10;
 let ValMode = 1;
 
 app.get("/", (req, res) => {
@@ -32,20 +18,21 @@ class DataTable {
   }
 
   addData(data) {
-    const options = {
-      timeZone: 'Europe/Paris',
-      hour12: false, // Si vous voulez afficher l'heure au format 24h
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    };
+    const currentTime = new Date().toLocaleString('fr-FR', {
+      //weekday: 'long',  // "lundi", "mardi", etc.
+      //year: '2-digit',  // "2024"
+      month: '2-digit',    // "septembre"
+      day: 'numeric',   // "24"
+      hour: '2-digit',  // "14"
+      minute: '2-digit', // "30"
+      second: '2-digit', // "45"
+      hour12: false     // Utilisez `true` pour le format 12 heures
+    });
 
-    const date = new Date();
-    const heureReelle = new Intl.DateTimeFormat('fr-FR', options).format(date);
-    //console.log(`Heure réelle en France : ${heureReelle}`);
+    const entry = { data: data, time: currentTime };
 
-    const entry = { data: data, time: heureReelle };
     this.table.unshift(entry); // Ajoute la nouvelle donnée
+
     if (this.table.length > 8500) {
       this.table.pop(); // Supprime le dernier élément si le tableau a plus de x éléments
     }
@@ -71,6 +58,7 @@ wss.on("connection", (ws) => {
   ws.on("message", (message) => {
     if (message.length < 2000) {
       //console.log("Message texte reçu: taille:", message.length, "bytes");
+
       let data;
       try {
         data = JSON.parse(message);
@@ -78,11 +66,13 @@ wss.on("connection", (ws) => {
         console.log("Erreur de parsing JSON:", error);
         return; // Ne pas aller plus loin si JSON invalide
       }
+
       // Vérifier si temperature existe
       if (data.temperature !== undefined) {
         //console.log("data.temperature:", data.temperature);
         //console.log("mode:", ValMode);
         const currentTime2 = Date.now();
+
         if (currentTime2 - lastAddDataTime >= 10000) { //10000 delai acquistion
           // Mettre à jour le dernier temps d'envoi
           lastAddDataTime = currentTime2;
@@ -93,12 +83,14 @@ wss.on("connection", (ws) => {
       }
 
       const currentTime = Date.now();
+
       // Vérifier si 10 secondes se sont écoulées depuis le dernier envoi de la DataTable
       if (currentTime - lastDataTableSendTime >= DATA_TABLE_INTERVAL) {
         // Mettre à jour le dernier temps d'envoi
         lastDataTableSendTime = currentTime;
 
         let tableauOriginal = dataTable.getData(); // Obtenir les données réelles du dataTable
+
 
         const nombreDeLignes = 12; // Choisissez le nombre de lignes à moyenne
         const TabMoyHeure = [];
@@ -115,6 +107,10 @@ wss.on("connection", (ws) => {
 
             // Prendre le dernier `time` du bloc
             const dernierTime = bloc[bloc.length - 1].time;
+
+            //if (TabMoyHeure.length >= 360) {
+            // TabMoyHeure.shift();
+            //}
 
             // Ajouter au tableau de moyenne
             TabMoyHeure.push({ data: moyenne, time: dernierTime });
@@ -139,6 +135,9 @@ wss.on("connection", (ws) => {
             // Prendre le dernier `time` du bloc
             const dernierTime = bloc[bloc.length - 1].time;
 
+            //if (TabMoyJour.length >= 30) {
+            // TabMoyJour.shift();
+            //}
             // Ajouter au tableau de moyenne
             TabMoyJour.push({ data: moyenne, time: dernierTime });
           }
@@ -147,6 +146,9 @@ wss.on("connection", (ws) => {
         } else {
           console.log('Pas assez de données pour calculer une moyenne jour.');
         }
+
+
+
 
         if (ValMode === 2) {
           const dataTable2 = TabMoyHeure.slice(0, 30);
